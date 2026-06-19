@@ -18,6 +18,7 @@ from PyQt6.QtWidgets import (
 
 from .. import config, settings_store
 from ..style import DANGER, SUCCESS
+from . import styled_dialog
 from .flow_layout import FlowLayout
 from .styled_dialog import StyledDialog
 
@@ -136,6 +137,14 @@ class SaveDialog(StyledDialog):
     def _remove_name(self, name: str) -> None:
         settings_store.remove_name(name)
         self._refresh_chips()
+
+    def accept(self) -> None:
+        # 이름이 비어 있으면 저장하지 않음
+        if not self.name_edit.text().strip():
+            styled_dialog.info(self, "확인", "이름을 입력해 주세요.")
+            self.name_edit.setFocus()
+            return
+        super().accept()
 
     def _focus_shift(self) -> None:
         self.shift_combo.setFocus()

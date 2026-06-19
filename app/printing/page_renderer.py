@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import QRectF, Qt
-from PyQt6.QtGui import QColor, QFont, QImage, QPainter, QPen
+from PyQt6.QtGui import QBrush, QColor, QFont, QFontMetricsF, QImage, QPainter, QPen
 from PyQt6.QtPrintSupport import QPrinter
 
 from .. import config
@@ -16,6 +16,14 @@ SUCCESS = QColor("#2f9e44")
 TEXT = QColor("#2b2f38")
 SUBTLE = QColor("#8a93a3")
 BORDER = QColor("#cfd6e4")
+
+# 단위 박스 색 (앱 카드와 동일): 5만=연주황 / 1만=연초록 / 나머지=회색
+DENOM_BG_DEFAULT = QColor("#eef1f6")
+DENOM_FG_DEFAULT = QColor("#2b2f38")
+DENOM_COLORS = {
+    50000: (QColor("#ffe8d2"), QColor("#c2410c")),
+    10000: (QColor("#d9f2e0"), QColor("#1f8a44")),
+}
 
 
 def _chunk(items: list, size: int) -> list[list]:
@@ -112,48 +120,61 @@ class RecordRenderer:
 
         base_font = QFont("Malgun Gothic")
         base_font.setPixelSize(max(7, int(line_h * 0.5)))
+        bold_font = QFont(base_font)
+        bold_font.setBold(True)
 
-        # 날짜 (상단 중앙)
+        # 날짜 + 시각 (상단 중앙, 앱과 동일하게 datetime)
         date_font = QFont(base_font)
         date_font.setBold(True)
-        date_font.setPixelSize(max(8, int(line_h * 0.6)))
+        date_font.setPixelSize(max(8, int(line_h * 0.58)))
         p.setFont(date_font)
         p.setPen(QPen(TEXT))
         p.drawText(
             QRectF(inner.left(), inner.top(), inner.width(), line_h * 1.2),
             Qt.AlignmentFlag.AlignCenter,
-            rec.date_display(),
+            rec.datetime_display(),
         )
 
         content_top = inner.top() + line_h * 1.5
         col_w = inner.width() / 2.0
-        p.setFont(base_font)
 
-        # 좌측: 단위(우정렬) / 매수(좌정렬) → 매수 숫자 세로 정렬
-        name_w = col_w * 0.5
+        # 좌측: 단위(색상 박스, 우정렬) + 매수(좌정렬) → 매수 숫자 세로 정렬
+        name_w = col_w * 0.52
         gap_w = col_w * 0.08
-        p.setPen(QPen(TEXT))
+        fm = QFontMetricsF(bold_font)
+        box_h = line_h * 0.82
+        pad_x = line_h * 0.22
         for i, denom in enumerate(config.DENOMINATIONS):
             cnt = rec.counts.get(denom, 0)
             y = content_top + i * line_h
-            p.drawText(
-                QRectF(inner.left(), y, name_w, line_h),
-                Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
-                _denom_name(denom),
-            )
+            name = _denom_name(denom)
+            bg, fg = DENOM_COLORS.get(denom, (DENOM_BG_DEFAULT, DENOM_FG_DEFAULT))
+            tw = fm.horizontalAdvance(name)
+            box_w = tw + pad_x * 2
+            box_right = inner.left() + name_w
+            box = QRectF(box_right - box_w, y + (line_h - box_h) / 2, box_w, box_h)
+            p.setPen(Qt.PenStyle.NoPen)
+            p.setBrush(QBrush(bg))
+            p.drawRoundedRect(box, box_h * 0.35, box_h * 0.35)
+            p.setFont(bold_font)
+            p.setPen(QPen(fg))
+            p.drawText(box, Qt.AlignmentFlag.AlignCenter, name)
+            # 매수
+            p.setFont(base_font)
+            p.setPen(QPen(TEXT))
             p.drawText(
                 QRectF(inner.left() + name_w + gap_w, y, col_w - name_w - gap_w, line_h),
                 Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
                 str(cnt),
             )
 
-        # 우측: 데이터/금고/차액/메모
+        # 우측: 데이터/금고/차액/메모 (앱과 동일하게 굵게)
         rx = inner.left() + col_w
+        p.setFont(bold_font)
         rows = [
             ("데이터  " + f"{rec.data:,}", TEXT),
             ("금고  " + f"{rec.safe:,}", TEXT),
             ("차액  " + f"{rec.diff:,}", DANGER if rec.diff < 0 else SUCCESS),
-            ("메모", SUBTLE),
         ]
         for i, (text, color) in enumerate(rows):
             y = content_top + i * line_h
@@ -163,16 +184,27 @@ class RecordRenderer:
                 Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
                 text,
             )
-        # 메모 내용 (줄바꿈)
-        memo_rect = QRectF(rx, content_top + 4 * line_h, col_w, line_h * 2.5)
+        # 메모 라벨 + 차액과 간격
         p.setPen(QPen(TEXT))
+        p.drawText(
+            QRectF(rx, content_top + 3.6 * line_h, col_w, line_h),
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+            "메모",
+        )
+        memo_rect = QRectF(rx, content_top + 4.6 * line_h, col_w, line_h * 2.2)
         p.drawText(memo_rect, Qt.AlignmentFlag.AlignLeft | Qt.TextFlag.TextWordWrap, rec.memo or "")
 
-        # 하단: 이름 / 근무시간
-        foot_font = QFont(base_font)
-        foot_font.setBold(True)
-        p.setFont(foot_font)
+        # 하단: 이름 / 근무시간 (굵게)
+        p.setFont(bold_font)
         p.setPen(QPen(TEXT))
         foot_rect = QRectF(inner.left(), inner.bottom() - line_h, inner.width(), line_h)
-        p.drawText(foot_rect, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, rec.name or "-")
-        p.drawText(foot_rect, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, rec.shift or "")
+        p.drawText(
+            QRectF(inner.left(), foot_rect.top(), inner.width() * 0.5, line_h),
+            Qt.AlignmentFlag.AlignCenter | Qt.AlignmentFlag.AlignVCenter,
+            rec.name or "-",
+        )
+        p.drawText(
+            QRectF(inner.left() + inner.width() * 0.5, foot_rect.top(), inner.width() * 0.5, line_h),
+            Qt.AlignmentFlag.AlignCenter | Qt.AlignmentFlag.AlignVCenter,
+            rec.shift or "",
+        )
