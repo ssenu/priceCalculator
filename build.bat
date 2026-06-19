@@ -1,12 +1,12 @@
 @echo off
-REM 시제계산기 exe 빌드 (PyInstaller onefile)
+REM 시재계산기 exe 빌드 (PyInstaller onefile)
 REM uv 환경에서 실행: build.bat
 cd /d "%~dp0"
-uv run pyinstaller --noconfirm --onefile --windowed --name 시제계산기 ^
+uv run pyinstaller --noconfirm --onefile --windowed --name 시재계산기 ^
   --icon app\assets\icon.ico ^
   --add-data "app\assets\icon.ico;app/assets" ^
   --collect-submodules app ^
   main.py
 echo.
-echo 빌드 완료: dist\시제계산기.exe
+echo 빌드 완료: dist\시재계산기.exe
 pause

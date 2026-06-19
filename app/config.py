@@ -6,7 +6,8 @@ import os
 import sys
 from pathlib import Path
 
-APP_NAME = "시제계산기"
+APP_NAME = "시재계산기"
+_OLD_APP_NAME = "시제계산기"  # 이전 오타 폴더명 (자동 이관용)
 
 
 def resource_path(rel: str) -> Path:
@@ -52,9 +53,19 @@ WEEKDAYS_KO = ["월", "화", "수", "목", "금", "토", "일"]
 
 
 def data_dir() -> Path:
-    """데이터 저장 폴더 (%APPDATA%/시재계산기). 없으면 생성."""
+    """데이터 저장 폴더 (%APPDATA%/시재계산기). 없으면 생성.
+
+    이전 오타 폴더(시제계산기)가 있으면 한 번 자동으로 이관해 기존 기록을 보존한다.
+    """
     base = os.getenv("APPDATA") or os.path.expanduser("~")
     path = Path(base) / APP_NAME
+    if not path.exists():
+        old = Path(base) / _OLD_APP_NAME
+        if old.exists() and old.is_dir():
+            try:
+                old.rename(path)  # 폴더째 이관 (records.json/settings.json 보존)
+            except OSError:
+                pass
     path.mkdir(parents=True, exist_ok=True)
     return path
 
